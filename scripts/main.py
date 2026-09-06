@@ -1,10 +1,10 @@
 """
 Orchestrates the full daily pipeline:
-  1. Generate today's content plan (Gemini) — topic, long script, short script.
-  2. Generate TTS audio (Hindi) for every section + the short.
-  3. Fetch stock visuals (Pexels) for every section + the short.
-  4. Assemble the long video and the short video (ffmpeg).
-  5. Upload both to YouTube.
+1. Generate today's content plan (Gemini) — topic, long script, short script.
+2. Generate TTS audio (Hindi) for every section + the short.
+3. Fetch stock visuals (Pexels) for every section + the short.
+4. Assemble the long video and the short video (ffmpeg).
+5. Upload both to YouTube.
 
 Run with: python main.py
 """
@@ -19,12 +19,19 @@ from fetch_visuals import fetch_all_for_plan
 from assemble_long import assemble_long_video
 from assemble_short import assemble_short_video
 from upload_youtube import upload_video
+from topics import already_ran_today
 
 STATE_DIR = os.path.join(os.path.dirname(__file__), "..", "state")
 
 
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
+
+    if already_ran_today():
+        print("Already uploaded today's videos — skipping duplicate run.")
+        print("(This guard makes it safe to trigger this workflow more than once a day,")
+        print(" e.g. from both GitHub's native schedule and the cron-job.org backup ping.)")
+        return
 
     print("=== Step 1: Generating content plan with Gemini ===")
     plan = generate_content_plan()

@@ -10,6 +10,10 @@ on:
         description: "Dry run only (skip actual YouTube upload)"
         required: false
         default: "false"
+      force_run:
+        description: "Bypass the same-day duplicate-run guard (manual extra run)"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -44,6 +48,7 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           SKIP_UPLOAD: ${{ github.event.inputs.skip_upload == 'true' && '1' || '0' }}
+          FORCE_RUN: ${{ github.event.inputs.force_run == 'true' && '1' || '0' }}
         run: |
           cd scripts
           python -u main.py

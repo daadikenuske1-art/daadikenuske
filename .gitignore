@@ -1,0 +1,10 @@
+state/audio/
+state/visuals/
+state/work_long/
+state/work_short/
+state/output/
+state/today_plan.json
+state/visual_assets.json
+__pycache__/
+*.pyc
+.env

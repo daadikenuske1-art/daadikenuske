@@ -18,7 +18,7 @@ import google.generativeai as genai
 
 from topics import get_todays_category, get_recent_topics, record_topic
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 
 def _configure():

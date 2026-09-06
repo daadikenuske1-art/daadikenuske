@@ -59,6 +59,19 @@ def get_recent_topics(days=ROTATION_WINDOW_DAYS):
     return recent
 
 
+def already_ran_today():
+    """True if a topic has already been recorded for today's UTC date.
+
+    Used as a safety guard so that if two independent schedulers (GitHub's
+    native cron trigger and the external cron-job.org backup ping) both
+    fire on the same day, the second one is a harmless no-op instead of
+    producing a duplicate upload.
+    """
+    history = _load_history()
+    today = datetime.date.today().isoformat()
+    return any(entry.get("date") == today for entry in history)
+
+
 def record_topic(topic):
     history = _load_history()
     history.append({"date": datetime.date.today().isoformat(), "topic": topic})

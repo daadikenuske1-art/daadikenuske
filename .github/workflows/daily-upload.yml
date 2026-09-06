@@ -46,7 +46,7 @@ jobs:
           SKIP_UPLOAD: ${{ github.event.inputs.skip_upload == 'true' && '1' || '0' }}
         run: |
           cd scripts
-          python main.py
+          python -u main.py
 
       - name: Upload video artifacts (for review / debugging)
         if: always()

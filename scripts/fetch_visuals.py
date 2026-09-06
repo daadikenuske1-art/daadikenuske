@@ -1,115 +1,86 @@
 """
-Fetches stock video clips (falling back to photos) from Pexels for a list of
-English visual keywords. Free API, requires PEXELS_API_KEY.
+Generates AI images (via Gemini's native image generation) that precisely match
+each section's content, replacing generic stock footage/photos. Uses
+GEMINI_API_KEY (already required by generate_script.py).
 """
 
 import os
 import time
 
-import requests
+import google.generativeai as genai
 
-PEXELS_VIDEO_SEARCH = "https://api.pexels.com/videos/search"
-PEXELS_PHOTO_SEARCH = "https://api.pexels.com/v1/search"
+GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image"
 
 VISUALS_DIR = os.path.join(os.path.dirname(__file__), "..", "state", "visuals")
 
-
-def _headers():
-    return {"Authorization": os.environ["PEXELS_API_KEY"]}
-
-
-def _pick_best_video_file(video, min_width=1080):
-    files = video.get("video_files", [])
-    # prefer mp4, closest to min_width without going too huge
-    candidates = [f for f in files if f.get("file_type") == "video/mp4"]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda f: abs((f.get("width") or 0) - min_width))
-    return candidates[0]
+STYLE_SUFFIX = (
+    ", photorealistic, warm natural lighting, authentic Indian home/kitchen setting, "
+    "no text or watermarks, no logos"
+)
 
 
-def search_video_clip(keyword, orientation="landscape"):
-    params = {"query": keyword, "per_page": 5, "orientation": orientation}
-    r = requests.get(PEXELS_VIDEO_SEARCH, headers=_headers(), params=params, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    videos = data.get("videos", [])
-    if not videos:
-        return None
-    return _pick_best_video_file(videos[0])
+def _configure():
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 
-def search_photo(keyword, orientation="landscape"):
-    params = {"query": keyword, "per_page": 5, "orientation": orientation}
-    r = requests.get(PEXELS_PHOTO_SEARCH, headers=_headers(), params=params, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    photos = data.get("photos", [])
-    if not photos:
-        return None
-    return photos[0]["src"]["large2x"]
+def generate_image(prompt, out_path, max_retries=3):
+    """Generates a single image for `prompt` and saves it to `out_path`.
+    Returns out_path on success, or None if generation failed after retries."""
+    model = genai.GenerativeModel(GEMINI_IMAGE_MODEL)
+    full_prompt = prompt.strip() + STYLE_SUFFIX
 
-
-def download_file(url, out_path):
-    r = requests.get(url, stream=True, timeout=60)
-    r.raise_for_status()
-    with open(out_path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=1 << 16):
-            f.write(chunk)
-    return out_path
-
-
-def fetch_visual_for_keyword(keyword, out_dir, index, orientation="landscape"):
-    os.makedirs(out_dir, exist_ok=True)
-    try:
-        video_file = search_video_clip(keyword, orientation=orientation)
-        if video_file:
-            out_path = os.path.join(out_dir, f"clip_{index:03d}.mp4")
-            download_file(video_file["link"], out_path)
-            return {"type": "video", "path": out_path}
-    except requests.RequestException:
-        pass
-
-    time.sleep(1)  # be polite to rate limits before falling back
-
-    try:
-        photo_url = search_photo(keyword, orientation=orientation)
-        if photo_url:
-            out_path = os.path.join(out_dir, f"clip_{index:03d}.jpg")
-            download_file(photo_url, out_path)
-            return {"type": "image", "path": out_path}
-    except requests.RequestException:
-        pass
-
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    response_modalities=["TEXT", "IMAGE"]
+                ),
+            )
+            for part in response.parts:
+                inline = getattr(part, "inline_data", None)
+                if inline and inline.mime_type.startswith("image"):
+                    with open(out_path, "wb") as f:
+                        f.write(inline.data)
+                    return out_path
+        except Exception:
+            pass
+        time.sleep(3 * (attempt + 1))
     return None
 
 
 def fetch_all_for_plan(plan):
-    """Downloads visuals for every long-video section and the short video.
+    """Generates AI images for every long-video section and the short video.
     Returns dict: {"long": [[assets...], ...], "short": [assets...]}
+    (assets are {"type": "image", "path": ...}, same shape the ffmpeg
+    assembly step already expects.)
     """
+    _configure()
+
     long_assets = []
     idx = 0
+    long_dir = os.path.join(VISUALS_DIR, "long")
+    os.makedirs(long_dir, exist_ok=True)
     for section in plan["long_video"]["script_sections"]:
         section_assets = []
         for kw in section["visual_keywords"]:
-            asset = fetch_visual_for_keyword(
-                kw, os.path.join(VISUALS_DIR, "long"), idx, orientation="landscape"
-            )
-            if asset:
-                section_assets.append(asset)
+            out_path = os.path.join(long_dir, f"img_{idx:03d}.png")
+            result = generate_image(kw, out_path)
+            if result:
+                section_assets.append({"type": "image", "path": result})
             idx += 1
-            time.sleep(0.5)
+            time.sleep(2)
         long_assets.append(section_assets)
 
     short_assets = []
+    short_dir = os.path.join(VISUALS_DIR, "short")
+    os.makedirs(short_dir, exist_ok=True)
     for i, kw in enumerate(plan["short_video"]["visual_keywords"]):
-        asset = fetch_visual_for_keyword(
-            kw, os.path.join(VISUALS_DIR, "short"), i, orientation="portrait"
-        )
-        if asset:
-            short_assets.append(asset)
-        time.sleep(0.5)
+        out_path = os.path.join(short_dir, f"img_{i:03d}.png")
+        result = generate_image(kw, out_path)
+        if result:
+            short_assets.append({"type": "image", "path": result})
+        time.sleep(2)
 
     return {"long": long_assets, "short": short_assets}
 
@@ -122,6 +93,6 @@ if __name__ == "__main__":
         plan = json.load(f)
     assets = fetch_all_for_plan(plan)
     print(
-        f"Fetched visuals: {sum(len(s) for s in assets['long'])} for long video, "
+        f"Generated visuals: {sum(len(s) for s in assets['long'])} for long video, "
         f"{len(assets['short'])} for short video."
     )

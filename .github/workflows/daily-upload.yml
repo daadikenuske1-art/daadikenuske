@@ -1,0 +1,68 @@
+name: Daily DaadiKeNuske Upload
+
+on:
+  schedule:
+    # 09:00 IST daily = 03:30 UTC
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: "Dry run only (skip actual YouTube upload)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies (ffmpeg + Hindi font)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto fonts-noto-core fonts-noto-extra
+          fc-list | grep -i devanagari || true
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          SKIP_UPLOAD: ${{ github.event.inputs.skip_upload == 'true' && '1' || '0' }}
+        run: |
+          cd scripts
+          python main.py
+
+      - name: Upload video artifacts (for review / debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-videos-${{ github.run_number }}
+          path: |
+            state/output/*.mp4
+            state/today_plan.json
+          retention-days: 7
+
+      - name: Commit updated topic history
+        if: always()
+        run: |
+          git config user.name "daadikenuske-bot"
+          git config user.email "actions@github.com"
+          git add state/history.json
+          git diff --cached --quiet || git commit -m "chore: update topic history [skip ci]"
+          git push || true

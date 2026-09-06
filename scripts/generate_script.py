@@ -1,11 +1,11 @@
 """
 Uses Gemini to:
-  1. Pick a specific, unique home-remedy topic within today's category.
-  2. Write a long-form Hindi narration script (~6-8 minutes when spoken).
-  3. Write a short-form Hindi narration script (<=30 seconds when spoken, punchy).
-  4. Write YouTube titles/descriptions/tags for both.
-  5. Suggest 6-10 English visual search keywords (for Pexels stock footage/photos)
-     for each section of the long video, and 3-4 for the short video.
+1. Pick a specific, unique home-remedy topic within today's category.
+2. Write a long-form Hindi narration script (~6-8 minutes when spoken).
+3. Write a short-form Hindi narration script (<=30 seconds when spoken, punchy).
+4. Write YouTube titles/descriptions/tags for both.
+5. Write 2 detailed AI-image-generation prompts (concrete visual scenes that match
+   the narration precisely) for each section of the long video, and 2 for the short video.
 
 Outputs a single JSON blob consumed by the rest of the pipeline.
 """
@@ -56,7 +56,7 @@ Return ONLY valid JSON (no markdown fences) with this exact shape:
     "script_sections": [
       {{
         "narration_hi": "Hindi narration text for this section, warm and conversational, like a daadi speaking",
-        "visual_keywords": ["english keyword1", "english keyword2", "english keyword3"]
+        "visual_keywords": ["detailed image-generation prompt 1", "detailed image-generation prompt 2"]
       }}
     ]
   }},
@@ -65,7 +65,7 @@ Return ONLY valid JSON (no markdown fences) with this exact shape:
     "description": "1 short Hindi paragraph + relevant hashtags including #Shorts",
     "tags": ["hindi", "shorts", "..."],
     "narration_hi": "single punchy Hindi narration script, MUST be speakable within 28-30 seconds (roughly 60-70 Hindi words), hook in first line",
-    "visual_keywords": ["english keyword1", "english keyword2", "english keyword3", "english keyword4"]
+    "visual_keywords": ["detailed image-generation prompt 1", "detailed image-generation prompt 2"]
   }}
 }}
 
@@ -77,9 +77,15 @@ Rules:
   call-to-subscribe.
 - All narration must be in Hindi (Devanagari script), natural spoken style, no English words
   except unavoidable product/ingredient names.
-- visual_keywords must be in English (used to search stock footage/photo libraries) and
-  concretely describe what should be shown on screen for that section (e.g. "turmeric powder
-  bowl closeup", "woman applying face pack", "fresh aloe vera leaf cut").
+- visual_keywords must be in English, exactly 2 items per section (and exactly 2 for the
+  short video). Each item is a full, self-contained AI-image-generation prompt describing one
+  specific, realistic, concrete scene that directly matches what that section's narration is
+  about — not a generic keyword. Be precise about the subject, setting, ingredients, and action
+  shown (e.g. "a close-up of golden turmeric powder in a small brass bowl on a rustic wooden
+  kitchen counter, soft warm morning light, no text or logos" rather than just "turmeric").
+  The two prompts for a section should show two different, complementary moments of that
+  section's content (e.g. the raw ingredient, then the remedy being prepared or applied).
+  Never include any text, captions, watermarks, or logos in the described scene.
 - Never give medical claims as guaranteed cures; frame everything as traditional/home-remedy
   knowledge passed down, and add a brief safety caveat (patch test, consult a doctor for
   serious/persistent issues, pregnancy-specific care under doctor's guidance).

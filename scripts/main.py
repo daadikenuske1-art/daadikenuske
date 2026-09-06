@@ -2,7 +2,7 @@
 Orchestrates the full daily pipeline:
 1. Generate today's content plan (Gemini) — topic, long script, short script.
 2. Generate TTS audio (Hindi) for every section + the short.
-3. Fetch stock visuals (Pexels) for every section + the short.
+3. Generate AI images (Gemini) for every section + the short.
 4. Assemble the long video and the short video (ffmpeg).
 5. Upload both to YouTube.
 
@@ -27,22 +27,23 @@ STATE_DIR = os.path.join(os.path.dirname(__file__), "..", "state")
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
 
-    if already_ran_today():
+    if already_ran_today() and os.environ.get("FORCE_RUN") != "1":
         print("Already uploaded today's videos — skipping duplicate run.")
         print("(This guard makes it safe to trigger this workflow more than once a day,")
-        print(" e.g. from both GitHub's native schedule and the cron-job.org backup ping.)")
+        print(" e.g. from both GitHub's native schedule and the cron-job.org backup ping.")
+        print(" Set FORCE_RUN=1 to bypass this for a manual extra run.)")
         return
 
     print("=== Step 1: Generating content plan with Gemini ===")
     plan = generate_content_plan()
     with open(os.path.join(STATE_DIR, "today_plan.json"), "w", encoding="utf-8") as f:
-        json.dump(plan, f, ensure_ascii=False, indent=2)
+     json.dump(plan, f, ensure_ascii=False, indent=2)
     print(f"Topic: {plan['topic']}")
 
     print("=== Step 2: Generating TTS audio ===")
     long_audio_paths, short_audio_path = generate_all_audio(plan)
 
-    print("=== Step 3: Fetching stock visuals ===")
+    print("=== Step 3: Generating AI visuals ===")
     assets = fetch_all_for_plan(plan)
     with open(os.path.join(STATE_DIR, "visual_assets.json"), "w", encoding="utf-8") as f:
         json.dump(assets, f, ensure_ascii=False, indent=2)

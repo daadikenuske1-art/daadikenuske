@@ -14,16 +14,20 @@ import json
 import os
 import re
 
-import google.generativeai as genai
+from google import genai
 
 from topics import get_todays_category, get_recent_topics, record_topic
 
 GEMINI_MODEL = "gemini-3.6-flash"
 
+_client = None
 
-def _configure():
-    api_key = os.environ["GEMINI_API_KEY"]
-    genai.configure(api_key=api_key)
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    return _client
 
 
 def _extract_json(text):
@@ -94,14 +98,13 @@ Rules:
 
 
 def generate_content_plan():
-    _configure()
+    client = _get_client()
     category = get_todays_category()
     recent_topics = get_recent_topics()
     recent_str = ", ".join(recent_topics) if recent_topics else "(none yet)"
 
-    model = genai.GenerativeModel(GEMINI_MODEL)
     prompt = PROMPT_TEMPLATE.format(category=category, recent_topics=recent_str)
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
     plan = _extract_json(response.text)
 
     record_topic(plan["topic"])
